@@ -3,12 +3,20 @@
 #include <DHT.h>
 
 // WiFi credentials
-const char* ssid = "KABU";
-const char* password = ""; // Add your WiFi password here
+const char* ssid = "LOTOBO";
+const char* password = "Kmtgrfn@2024"; // Your WiFi password
 
 // MQTT broker IP and port
-const char* mqtt_server = "10.1.19.51";
+const char* mqtt_server = " 192.168.1.132";
 const uint16_t mqtt_port = 1883;
+
+// MQTT Topics
+const char* TOPIC_IRRIGATION = "greenhouse/irrigation";
+const char* TOPIC_VENTILATION = "greenhouse/ventilation";
+const char* TOPIC_MODE = "greenhouse/mode";
+const char* TOPIC_TEMPERATURE = "greenhouse/temperature";
+const char* TOPIC_HUMIDITY = "greenhouse/humidity";
+const char* TOPIC_SOIL_MOISTURE = "greenhouse/soilMoisturePercent";
 
 // Sensor and control pin configuration
 #define DHTPIN 4
@@ -18,25 +26,30 @@ const uint16_t mqtt_port = 1883;
 #define MOISTURE_PIN 34
 
 // Threshold constants
-const float TEMP_ON_THRESHOLD = 30.0;     // Temperature to turn fan ON
-const float TEMP_OFF_THRESHOLD = 28.0;    // Temperature to turn fan OFF
-const float HUM_THRESHOLD = 60.0;         // Humidity threshold to turn fan ON
-const int MOISTURE_THRESHOLD = 2000;      // Soil moisture threshold; lower means dryer soil
+const float TEMP_ON_THRESHOLD = 30.0;    
+const float TEMP_OFF_THRESHOLD = 28.0;   
+const float HUM_THRESHOLD = 60.0;        
+
+// Soil moisture thresholds (adjust based on your sensor)
+const int MOISTURE_DRY = 3500;   // Higher ADC = dry
+const int MOISTURE_WET = 1500;   // Lower ADC = wet
 
 DHT dht(DHTPIN, DHTTYPE);
 
 WiFiClient espClient;
 PubSubClient client(espClient);
 
-// States for mode and manual control
-bool autoMode = true;          // true = ESP decides automatically
-bool pumpManual = false;       // Whether pump is manually controlled
-bool fanManual = false;        // Whether fan is manually controlled
-bool lastAutoMode = autoMode;  // Track mode change for serial print
-bool fanState = false;         // Current fan state to implement hysteresis
+// States
+bool autoMode = true;
+bool pumpManual = false;
+bool fanManual = false;
+bool lastAutoMode = autoMode;
+bool fanState = false;
 
 unsigned long lastMsg = 0;
-const long interval = 5000;    // Sensor publish interval (ms)
+const long interval = 5000;    // Publish interval
+unsigned long lastPrintTime = 0;
+const long printInterval = 60000;
 
 void setup_wifi() {
   delay(100);
@@ -60,7 +73,7 @@ void callback(char* topic, byte* payload, unsigned int length) {
   Serial.print("] = ");
   Serial.println(message);
 
-  if (String(topic) == "greenhouse/irrigation") {
+  if (String(topic) == TOPIC_IRRIGATION) {
     pumpManual = true;
     if (message == "ON") {
       digitalWrite(PUMP_PIN, HIGH);
@@ -69,18 +82,18 @@ void callback(char* topic, byte* payload, unsigned int length) {
       digitalWrite(PUMP_PIN, LOW);
       Serial.println("Pump OFF (manual)");
     }
-  } else if (String(topic) == "greenhouse/ventilation") {
+  } else if (String(topic) == TOPIC_VENTILATION) {
     fanManual = true;
     if (message == "OPEN") {
       digitalWrite(FAN_PIN, HIGH);
       fanState = true;
-      Serial.println("Fan OPEN (manual)");
+      Serial.println("Fan ON (manual)");
     } else if (message == "CLOSE") {
       digitalWrite(FAN_PIN, LOW);
       fanState = false;
-      Serial.println("Fan CLOSE (manual)");
+      Serial.println("Fan OFF (manual)");
     }
-  } else if (String(topic) == "greenhouse/mode") {
+  } else if (String(topic) == TOPIC_MODE) {
     if (message == "AUTO") {
       autoMode = true;
       pumpManual = false;
@@ -96,13 +109,12 @@ void callback(char* topic, byte* payload, unsigned int length) {
 void reconnect() {
   while (!client.connected()) {
     Serial.print("Attempting MQTT connection...");
-    String clientId = "ESP32Client-" + String(random(0xffff), HEX);
+    String clientId = "ESP32Client-" + String((uint64_t)ESP.getEfuseMac(), HEX);
     if (client.connect(clientId.c_str())) {
       Serial.println(" connected");
-      // Subscribe to control topics
-      client.subscribe("greenhouse/irrigation");
-      client.subscribe("greenhouse/ventilation");
-      client.subscribe("greenhouse/mode");
+      client.subscribe(TOPIC_IRRIGATION);
+      client.subscribe(TOPIC_VENTILATION);
+      client.subscribe(TOPIC_MODE);
     } else {
       Serial.print(" failed, rc=");
       Serial.print(client.state());
@@ -110,6 +122,13 @@ void reconnect() {
       delay(5000);
     }
   }
+}
+
+// Fix: Map dry (high value) to 0% and wet (low value) to 100%
+int getSoilMoisturePercent(int raw) {
+  raw = constrain(raw, MOISTURE_WET, MOISTURE_DRY);
+  int percent = map(raw, MOISTURE_DRY, MOISTURE_WET, 0, 100); // Reverse mapping
+  return constrain(percent, 0, 100);
 }
 
 void setup() {
@@ -132,41 +151,23 @@ void loop() {
   }
   client.loop();
 
-  // Read sensors
   float temp = dht.readTemperature();
   float hum = dht.readHumidity();
-  int moisture = analogRead(MOISTURE_PIN);
+  int rawMoisture = analogRead(MOISTURE_PIN);
+  int moisturePercent = getSoilMoisturePercent(rawMoisture);
 
-  // Validate sensor readings
   if (isnan(temp) || isnan(hum)) {
     Serial.println("Failed to read from DHT sensor!");
     delay(1000);
-    return; // Skip rest of this loop iteration if sensor read failed
+    return;
   }
 
-  // Soil dryness check
-  bool isSoilDry = (moisture < MOISTURE_THRESHOLD); // Lower value means drier soil
-
-  // Debug sensor readings
-  Serial.print("Temp: "); Serial.print(temp); Serial.print(" °C, ");
-  Serial.print("Humidity: "); Serial.print(hum); Serial.print(" %, ");
-  Serial.print("Soil Moisture: "); Serial.println(moisture);
-
-  // Detect mode change for serial output
   if (autoMode != lastAutoMode) {
-    if (autoMode) {
-      Serial.println("Switched to AUTO mode");
-    } else {
-      Serial.println("Switched to MANUAL mode");
-    }
+    Serial.println(autoMode ? "Switched to AUTO mode" : "Switched to MANUAL mode");
     lastAutoMode = autoMode;
   }
 
-  // Control logic
   if (autoMode) {
-    // AUTO mode: ESP controls based on sensor data
-
-    // Fan control hysteresis
     if ((temp > TEMP_ON_THRESHOLD) || (hum > HUM_THRESHOLD)) {
       if (!fanState) {
         digitalWrite(FAN_PIN, HIGH);
@@ -181,35 +182,41 @@ void loop() {
       }
     }
 
-    // Soil moisture control
-    digitalWrite(PUMP_PIN, isSoilDry ? HIGH : LOW);
-    Serial.print("Pump ");
-    Serial.println(isSoilDry ? "ON (auto)" : "OFF (auto)");
-
-  } else {
-    // MANUAL mode: respect manual commands
-    // If manual control not triggered, devices stay as-is
     if (!pumpManual) {
-      // Optional: define default pump state or keep last known state
+      if (moisturePercent < 40) {
+        digitalWrite(PUMP_PIN, HIGH);
+        Serial.println("Pump ON (auto - soil dry)");
+      } else {
+        digitalWrite(PUMP_PIN, LOW);
+        Serial.println("Pump OFF (auto - soil moist)");
+      }
     }
-    if (!fanManual) {
-      // Optional: define default fan state or keep last known state
-    }
-    // Manual commands are handled via MQTT callbacks
   }
 
-  // Periodic sensor data publish
+  // Debug prints
+  Serial.print("Raw Moisture ADC: ");
+  Serial.print(rawMoisture);
+  Serial.print(" -> Moisture: ");
+  Serial.print(moisturePercent);
+  Serial.println(" %");
+
   unsigned long now = millis();
   if (now - lastMsg > interval) {
     lastMsg = now;
-
-    client.publish("greenhouse/temperature", String(temp).c_str());
-    client.publish("greenhouse/humidity", String(hum).c_str());
-    client.publish("greenhouse/soilMoisture", String(moisture).c_str());
-
+    client.publish(TOPIC_TEMPERATURE, String(temp, 1).c_str());
+    client.publish(TOPIC_HUMIDITY, String(hum, 1).c_str());
+    client.publish(TOPIC_SOIL_MOISTURE, String(moisturePercent).c_str());
     Serial.println("===== Sensor Data Published =====");
+  }
+
+  if (now - lastPrintTime >= printInterval) {
+    lastPrintTime = now;
+    Serial.println("---------- Sensor Readings ----------");
+    Serial.printf("Temperature: %.1f °C\n", temp);
+    Serial.printf("Humidity: %.1f %%\n", hum);
+    Serial.printf("Soil Moisture: %d %%\n", moisturePercent);
+    Serial.println("------------------------------------");
   }
 
   delay(100);
 }
-
