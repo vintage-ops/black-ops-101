@@ -1,0 +1,136 @@
+🪣 Malware Analysis C/C++ & Python Bucket List
+1. Core Programming Foundations
+ C Basics
+
+Variables, data types, operators
+
+Control structures (if, for, while, switch)
+
+Functions (declaration, definition, scope)
+
+Pointers and memory addresses
+
+ C++ Basics
+
+Classes and objects
+
+Inheritance & polymorphism
+
+Namespaces & references
+
+ Python Basics
+
+Data types (lists, dicts, tuples, sets)
+
+Functions & modules
+
+File I/O
+
+Error handling
+
+2. Memory & Low-Level Concepts
+ Pointers & References in C/C++
+
+ Dynamic memory management (malloc, free, new, delete)
+
+ Structs & Unions
+
+ Bitwise operations (AND, OR, XOR, shifts)
+
+ Endianness (little vs big endian)
+
+ String manipulation (strcpy, strcmp, buffer overflows basics)
+
+3. File & Process Manipulation
+ File reading/writing in C (fopen, fread, fwrite)
+
+ Binary file parsing
+
+ Directory traversal (dirent.h in C, os in Python)
+
+ Executing commands (system(), exec in C, subprocess in Python)
+
+ Creating & killing processes
+
+4. Networking
+ C socket programming (TCP & UDP)
+
+ Python sockets (socket module)
+
+ Simple HTTP requests in Python (requests)
+
+ Packet capture basics (scapy in Python, raw sockets in C)
+
+ Understanding ports, IP addresses, and DNS
+
+5. Malware Techniques to Understand
+(For learning & defense, not deployment)
+
+ File encryption (XOR, AES basics)
+
+ Keylogging (how they hook keyboard events)
+
+ Process injection (DLL injection basics)
+
+ Persistence mechanisms (startup scripts, registry in Windows)
+
+ Polymorphism & obfuscation
+
+ Packing & unpacking executables
+
+ Network beaconing (C2 communication patterns)
+
+6. Reverse Engineering Basics
+ Reading assembly (x86/x64)
+
+ Understanding compiler optimizations
+
+ Using objdump & strings
+
+ Using GDB for debugging
+
+ Basic IDA Pro / Ghidra navigation
+
+7. Python for Malware Analysis
+ Writing automation scripts to analyze files
+
+ Parsing PE files (pefile library)
+
+ Reading network captures (scapy, pyshark)
+
+ Automating sandbox analysis
+
+ Writing quick deobfuscation tools
+
+8. Advanced C/C++ Skills
+ Multithreading (pthread, std::thread)
+
+ Shared memory & IPC
+
+ Hooking functions (API hooking)
+
+ Writing custom loaders for executables
+
+ Manual memory mapping of executables
+
+9. Security & OS Internals
+ Linux process management & /proc
+
+ Windows API basics (CreateFile, ReadFile, VirtualAlloc)
+
+ Syscalls & kernel mode concepts
+
+ Privilege escalation techniques
+
+ File system internals
+
+10. Tools to Learn Alongside
+ Ghidra / IDA Pro (disassembly & decompilation)
+
+ GDB / WinDbg (debugging)
+
+ Radare2 (reverse engineering CLI tool)
+
+ Procmon / Wireshark (monitoring processes & network)
+
+ YARA (malware signature creation)
